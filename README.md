@@ -4,6 +4,18 @@ Ajusta planilhas de **cenários de teste** removendo **todas as células mesclad
 **repetindo o dado** em cada célula desmesclada — sem perder nenhuma informação e
 garantindo que cada linha de teste fique completa e única.
 
+## Versão web (sem instalar nada)
+
+Abra o arquivo [`index.html`](index.html) no navegador (duplo clique), envie a planilha e
+clique em **Baixar planilha ajustada**. Tudo roda localmente no navegador: a planilha não é
+enviada para nenhum servidor. Para disponibilizar para o time, ative o GitHub Pages
+(Settings > Pages > Branch `main`, pasta `/`) e compartilhe o link.
+
+A versão web trabalha direto no XML do `.xlsx`, então estilos, comentários, imagens,
+gráficos, filtros e macros (`.xlsm`) ficam exatamente como estavam. Abas com fórmulas,
+comentários, links, imagens, validação de dados ou formatação condicional não têm linhas
+removidas (apenas aviso), para não quebrar referências.
+
 ## O que ele faz
 
 | Antes (mesclado)                 | Depois (ajustado)                       |
@@ -29,7 +41,9 @@ Regras de segurança:
   todo valor original presente. Se algo falhar, o relatório mostra `Validação: FALHOU`.
 - Todas as abas são processadas; macros de `.xlsm` são mantidas.
 
-## Instalação
+## Versão em Python (linha de comando)
+
+### Instalação
 
 Requer Python 3.9+.
 
@@ -37,7 +51,7 @@ Requer Python 3.9+.
 pip install -r requirements.txt
 ```
 
-## Uso
+### Uso
 
 ```bash
 # um arquivo
