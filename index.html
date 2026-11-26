@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ajustador de Cenários</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: uma coluna de trabalho (≈760px) — área de envio, opções, resultados por arquivo. */
+:root {
+  --bg: #f3f6f5;
+  --surface: #ffffff;
+  --ink: #14211d;
+  --muted: #56665f;
+  --line: #d3ddd9;
+  --accent: #1d6f53;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2f0ea;
+  --warn: #9a5b00;
+  --warn-soft: #fbefd9;
+  --bad: #b3261e;
+  --bad-soft: #fbe3e1;
+  --merge: #fff3c4;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1514; --surface: #172020; --ink: #e2ebe8; --muted: #93a39d; --line: #2b3734;
+    --accent: #4fbf92; --accent-ink: #08130f; --accent-soft: #183a2e;
+    --warn: #e6a64a; --warn-soft: #3a2a10; --bad: #f27b72; --bad-soft: #3d1a18; --merge: #3b3418;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1514; --surface: #172020; --ink: #e2ebe8; --muted: #93a39d; --line: #2b3734;
+  --accent: #4fbf92; --accent-ink: #08130f; --accent-soft: #183a2e;
+  --warn: #e6a64a; --warn-soft: #3a2a10; --bad: #f27b72; --bad-soft: #3d1a18; --merge: #3b3418;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 48px;
+}
+.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 8px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: clamp(26px, 5vw, 34px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); max-width: 62ch; }
+
+/* Antes / depois */
+.demo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 560px) { .demo { grid-template-columns: 1fr; } }
+.demo figure { margin: 0; display: grid; gap: 6px; min-width: 0; }
+.demo figcaption { font-size: 12px; font-family: var(--font-mono); color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.grid-scroll { overflow-x: auto; }
+table.mini { border-collapse: collapse; font-size: 12.5px; width: 100%; background: var(--surface); }
+table.mini td, table.mini th { border: 1px solid var(--line); padding: 4px 7px; text-align: left; white-space: nowrap; }
+table.mini th { font-weight: 600; color: var(--muted); font-size: 11.5px; }
+table.mini td.m { background: var(--merge); vertical-align: middle; font-weight: 600; }
+table.mini td.rep { background: var(--accent-soft); font-weight: 600; }
+
+/* Envio */
+.drop {
+  border: 2px dashed var(--line); border-radius: 10px; background: var(--surface);
+  padding: 28px 20px; display: grid; gap: 10px; justify-items: center; text-align: center;
+  transition: border-color .15s, background .15s; cursor: pointer;
+}
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.drop strong { font-size: 17px; }
+.drop small { color: var(--muted); }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; }
+label.opt { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; max-width: 52ch; cursor: pointer; }
+label.opt input { margin-top: 4px; accent-color: var(--accent); }
+button {
+  font: inherit; font-weight: 600; border-radius: 7px; padding: 9px 16px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+}
+button.ghost { background: transparent; color: var(--accent); }
+button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+button:disabled { opacity: .55; cursor: default; }
+
+/* Resultados */
+#results { display: grid; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
+.fname { font-weight: 600; word-break: break-all; min-width: 0; }
+.pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.pill.ok { background: var(--accent-soft); color: var(--accent); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 480px) { .stats { grid-template-columns: 1fr; } }
+.stat { border-top: 2px solid var(--line); padding-top: 6px; }
+.stat b { display: block; font-family: var(--font-mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12.5px; color: var(--muted); }
+details { border-top: 1px solid var(--line); padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.sheet { margin-top: 10px; display: grid; gap: 4px; font-size: 13.5px; }
+.sheet h4 { margin: 6px 0 0; font-size: 13.5px; }
+.sheet ul { margin: 0; padding-left: 18px; }
+.sheet li { margin: 2px 0; }
+.sheet li.warn { color: var(--warn); }
+.sheet li.bad { color: var(--bad); }
+code, .mono { font-family: var(--font-mono); font-size: .92em; }
+.msg { font-size: 13.5px; margin: 0; }
+.msg.bad { color: var(--bad); }
+.msg.ok { color: var(--accent); }
+.rules { display: grid; gap: 6px; font-size: 13.5px; color: var(--muted); margin: 0; padding-left: 18px; }
+.rules b { color: var(--ink); font-weight: 600; }
+footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Planilhas de cenários de teste</div>
+    <h1>Ajustador de Cenários</h1>
+    <p class="lead">Envie a planilha: todas as células mescladas são desfeitas e o dado é repetido em cada célula, para que toda linha de teste fique completa. O arquivo ajustado é gerado para download e o original não é alterado.</p>
+  </header>
+
+  <section class="demo" aria-label="Exemplo antes e depois">
+    <figure>
+      <figcaption>Antes · ID e cenário mesclados</figcaption>
+      <div class="grid-scroll">
+        <table class="mini">
+          <tr><th>ID</th><th>Cenário</th><th>Passo</th></tr>
+          <tr><td class="m" rowspan="3">CT-01</td><td class="m" rowspan="3">Login válido</td><td>Abrir tela</td></tr>
+          <tr><td>Informar usuário</td></tr>
+          <tr><td>Clicar entrar</td></tr>
+        </table>
+      </div>
+    </figure>
+    <figure>
+      <figcaption>Depois · cada linha completa</figcaption>
+      <div class="grid-scroll">
+        <table class="mini">
+          <tr><th>ID</th><th>Cenário</th><th>Passo</th></tr>
+          <tr><td>CT-01</td><td>Login válido</td><td>Abrir tela</td></tr>
+          <tr><td class="rep">CT-01</td><td class="rep">Login válido</td><td>Informar usuário</td></tr>
+          <tr><td class="rep">CT-01</td><td class="rep">Login válido</td><td>Clicar entrar</td></tr>
+        </table>
+      </div>
+    </figure>
+  </section>
+
+  <section style="display:grid;gap:14px">
+    <label class="drop" id="drop" for="file">
+      <strong>Arraste a planilha aqui ou clique para escolher</strong>
+      <small>Arquivos .xlsx ou .xlsm · pode enviar vários de uma vez</small>
+      <input type="file" id="file" accept=".xlsx,.xlsm" multiple>
+    </label>
+    <div class="row">
+      <label class="opt" for="optDup">
+        <input type="checkbox" id="optDup" checked>
+        <span>Remover linhas que ficaram idênticas à anterior só por causa da desmesclagem (sem nenhum dado próprio)</span>
+      </label>
+      <button type="button" class="ghost" id="sample">Testar com um exemplo</button>
+    </div>
+  </section>
+
+  <section id="results" aria-live="polite"></section>
+
+  <section>
+    <ul class="rules">
+      <li><b>Nada é perdido.</b> Estilos, comentários, imagens, gráficos, filtros e macros ficam como estavam; só as mesclagens mudam.</li>
+      <li><b>Valores escondidos</b> dentro de uma mesclagem (gravados por outros sistemas) são mantidos, nunca sobrescritos.</li>
+      <li><b>Linhas que já eram repetidas</b> no arquivo original não são apagadas; aparecem como atenção para você revisar.</li>
+      <li><b>Abas com fórmulas, comentários, links, imagens, validação ou formatação condicional</b> não têm linhas removidas, para não quebrar referências.</li>
+      <li><b>Conferência final:</b> o arquivo gerado é relido e comparado com o original antes de liberar o download.</li>
+    </ul>
+  </section>
+
+  <footer>Tudo roda no seu navegador. A planilha não é enviada para nenhum servidor.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+"use strict";
+/* ===================== Núcleo: manipula o XML do .xlsx ===================== */
+const REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+const colNum = s => { let n = 0; for (const ch of s) n = n * 26 + (ch.charCodeAt(0) - 64); return n; };
+const colStr = n => { let s = ""; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+function parseRef(ref) {
+  const m = /^\$?([A-Z]+)\$?(\d+)$/.exec(ref.trim().toUpperCase());
+  if (!m) throw new Error("Referência inválida: " + ref);
+  return { c: colNum(m[1]), r: +m[2] };
+}
+function parseRange(ref) {
+  const [a, b] = ref.split(":"); const p = parseRef(a), q = b ? parseRef(b) : p;
+  return { r1: Math.min(p.r, q.r), c1: Math.min(p.c, q.c), r2: Math.max(p.r, q.r), c2: Math.max(p.c, q.c) };
+}
+const byTag = (el, name) => Array.from(el.getElementsByTagNameNS("*", name));
+const kids = (el, name) => Array.from(el.children).filter(e => e.localName === name);
+const kid = (el, name) => Array.from(el.children).find(e => e.localName === name);
+
+function parseXml(text, path) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new Error("XML inválido em " + path);
+  return doc;
+}
+function serialize(doc, original) {
+  let s = new XMLSerializer().serializeToString(doc);
+  const decl = /^\s*<\?xml[^>]*\?>/.exec(original);
+  if (decl && !s.startsWith("<?xml")) s = decl[0].trim() + "\r\n" + s;
+  return s;
+}
+function resolvePath(baseDir, target) {
+  if (target.startsWith("/")) return target.slice(1);
+  const parts = (baseDir + target).split("/"); const out = [];
+  for (const p of parts) { if (p === "..") out.pop(); else if (p && p !== ".") out.push(p); }
+  return out.join("/");
+}
+function relsFor(path) { const i = path.lastIndexOf("/"); return path.slice(0, i + 1) + "_rels/" + path.slice(i + 1) + ".rels"; }
+const dirOf = path => path.slice(0, path.lastIndexOf("/") + 1);
+function textOf(el) { // texto de <si>/<is>, ignorando guias fonéticas
+  return byTag(el, "t").filter(t => t.parentElement.localName !== "rPh").map(t => t.textContent).join("");
+}
+
+async function openWorkbook(zip) {
+  let wbPath = "xl/workbook.xml";
+  const rootRels = zip.file("_rels/.rels");
+  if (rootRels) {
+    const d = parseXml(await rootRels.async("string"), "_rels/.rels");
+    const r = byTag(d, "Relationship").find(x => /\/officeDocument$/.test(x.getAttribute("Type")));
+    if (r) wbPath = resolvePath("", r.getAttribute("Target"));
+  }
+  const wbText = await zip.file(wbPath).async("string");
+  const wbDoc = parseXml(wbText, wbPath);
+  const relPath = relsFor(wbPath);
+  const relDoc = parseXml(await zip.file(relPath).async("string"), relPath);
+  const rels = new Map(byTag(relDoc, "Relationship").map(r => [r.getAttribute("Id"), r]));
+  let sst = [];
+  const sstRel = byTag(relDoc, "Relationship").find(r => /\/sharedStrings$/.test(r.getAttribute("Type")));
+  if (sstRel) {
+    const p = resolvePath(dirOf(wbPath), sstRel.getAttribute("Target"));
+    const f = zip.file(p);
+    if (f) sst = byTag(parseXml(await f.async("string"), p), "si").map(textOf);
+  }
+  const sheets = byTag(wbDoc, "sheet").map((s, i) => {
+    const rid = s.getAttributeNS(REL_NS, "id") || s.getAttribute("r:id");
+    const rel = rels.get(rid);
+    const isWs = rel && /\/worksheet$/.test(rel.getAttribute("Type"));
+    return { name: s.getAttribute("name"), index: i, path: isWs ? resolvePath(dirOf(wbPath), rel.getAttribute("Target")) : null };
+  });
+  return { wbPath, wbText, wbDoc, sst, sheets };
+}
+
+function indexSheet(doc) {
+  const sd = byTag(doc, "sheetData")[0];
+  const rows = new Map(), cells = new Map();
+  let lastR = 0;
+  for (const row of kids(sd, "row")) {
+    let r = +row.getAttribute("r");
+    if (!r) { r = lastR + 1; row.setAttribute("r", r); }
+    lastR = r; rows.set(r, row);
+    let lastC = 0;
+    for (const c of kids(row, "c")) {
+      let p;
+      const ref = c.getAttribute("r");
+      if (!ref) { p = { r, c: lastC + 1 }; c.setAttribute("r", colStr(p.c) + r); } else p = parseRef(ref);
+      lastC = p.c; cells.set(r + "," + p.c, c);
+    }
+  }
+  return { sd, rows, cells, ns: sd.namespaceURI };
+}
+
+/** Chave comparável do conteúdo de uma célula; null = célula sem dado. */
+function cellKey(c, sst) {
+  if (!c) return null;
+  const t = c.getAttribute("t") || "n";
+  const v = kid(c, "v"), f = kid(c, "f"), is = kid(c, "is");
+  let val = null;
+  if (t === "s" && v) val = "s:" + (sst[+v.textContent] ?? "");
+  else if (t === "inlineStr" && is) val = "s:" + textOf(is);
+  else if (v) val = (t === "str" ? "s" : t) + ":" + v.textContent;
+  const ft = f && f.textContent ? "=" + f.textContent : "";
+  if (val === null && !ft) return null;
+  return (val ?? "") + (ft ? " " + ft : "");
+}
+function displayKey(k) {
+  if (k == null) return "";
+  return k.replace(/^[a-z]+:/, "").slice(0, 60);
+}
+
+function getOrCreateCell(doc, idx, r, c) {
+  const key = r + "," + c;
+  if (idx.cells.has(key)) return idx.cells.get(key);
+  let row = idx.rows.get(r);
+  if (!row) {
+    row = doc.createElementNS(idx.ns, "row");
+    row.setAttribute("r", r);
+    const after = kids(idx.sd, "row").find(x => +x.getAttribute("r") > r);
+    idx.sd.insertBefore(row, after || null);
+    idx.rows.set(r, row);
+  }
+  const cell = doc.createElementNS(idx.ns, "c");
+  cell.setAttribute("r", colStr(c) + r);
+  const before = Array.from(row.children).find(x => x.localName !== "c" || parseRef(x.getAttribute("r")).c > c);
+  row.insertBefore(cell, before || null);
+  idx.cells.set(key, cell);
+  return cell;
+}
+
+function copyCell(doc, ns, master, target) {
+  for (const ch of Array.from(target.children)) if (["v", "f", "is"].includes(ch.localName)) ch.remove();
+  target.removeAttribute("t");
+  if (!master) return;
+  const s = master.getAttribute("s");
+  if (s != null) target.setAttribute("s", s); else target.removeAttribute("s");
+  const t = master.getAttribute("t"); if (t) target.setAttribute("t", t);
+  const f = kid(master, "f"), v = kid(master, "v"), is = kid(master, "is");
+  const ext = kid(target, "extLst");
+  // Fórmula comum: copiada como está (mesmo texto = mesmas células = mesmo resultado).
+  // Fórmulas de matriz ou compartilhadas dependentes: copia apenas o valor calculado.
+  if (f && f.textContent && f.getAttribute("t") !== "array") {
+    const nf = doc.createElementNS(ns, "f"); nf.textContent = f.textContent; target.insertBefore(nf, ext || null);
+  }
+  if (v) target.insertBefore(v.cloneNode(true), ext || null);
+  if (is) target.insertBefore(is.cloneNode(true), ext || null);
+}
+
+function rowSig(idx, r, sst) {
+  const row = idx.rows.get(r); if (!row) return "";
+  const parts = [];
+  for (const c of kids(row, "c")) { const k = cellKey(c, sst); if (k !== null) parts.push(parseRef(c.getAttribute("r")).c + "=" + k); }
+  return parts.join("\u0001");
+}
+
+function adjustRangeList(str, removed) {
+  const less = r => removed.filter(x => x < r).length;
+  const lessEq = r => removed.filter(x => x <= r).length;
+  return str.split(/\s+/).filter(Boolean).map(part => {
+    const g = parseRange(part.replace(/\$/g, ""));
+    const r1 = g.r1 - less(g.r1), r2 = Math.max(r1, g.r2 - lessEq(g.r2));
+    return colStr(g.c1) + r1 + (part.includes(":") ? ":" + colStr(g.c2) + r2 : "");
+  }).join(" ");
+}
+
+function escapeSheetName(n) { return "'" + n.replace(/'/g, "''") + "'"; }
+
+function sheetRisks(doc, sheet, book, allFormulaTexts) {
+  const risks = [];
+  const has = n => byTag(doc, n).length > 0;
+  if (has("f")) risks.push("fórmulas");
+  if (has("conditionalFormatting")) risks.push("formatação condicional");
+  if (has("dataValidation")) risks.push("validação de dados");
+  if (has("hyperlink")) risks.push("links");
+  if (has("drawing")) risks.push("imagens ou gráficos");
+  if (has("legacyDrawing") || has("legacyDrawingHF")) risks.push("comentários");
+  if (has("tablePart")) risks.push("tabelas");
+  if (has("rowBreaks")) risks.push("quebras de página");
+  if (has("sparklineGroup")) risks.push("minigráficos");
+  if (has("protectedRange") || has("scenarios")) risks.push("intervalos protegidos/cenários");
+  const nm = sheet.name.toLowerCase();
+  const refsSheet = txt => { const t = txt.toLowerCase(); return t.includes(escapeSheetName(sheet.name).toLowerCase() + "!") || t.includes(nm + "!"); };
+  const names = byTag(book.wbDoc, "definedName").filter(d => d.getAttribute("name") !== "_xlnm._FilterDatabase" && refsSheet(d.textContent));
+  if (names.length) risks.push("nomes definidos");
+  if (allFormulaTexts.some(refsSheet)) risks.push("referências de outras abas");
+  return risks;
+}
+
+async function ajustarArquivo(buffer, opts = {}) {
+  const removerRedundantes = opts.removerRedundantes !== false;
+  const zip = await JSZip.loadAsync(buffer);
+  const book = await openWorkbook(zip);
+  const relatorio = { abas: [], erros: [] };
+  const sheetDocs = [];
+  for (const sh of book.sheets) {
+    if (!sh.path || !zip.file(sh.path)) continue;
+    const text = await zip.file(sh.path).async("string");
+    sheetDocs.push({ sh, text, doc: parseXml(text, sh.path) });
+  }
+  const allFormulaTexts = sheetDocs.flatMap(s => byTag(s.doc, "f").map(f => f.textContent));
+  const checks = [];
+  let wbChanged = false;
+
+  for (const { sh, text, doc } of sheetDocs) {
+    const aba = { nome: sh.name, mesclagens: 0, preenchidas: 0, escondidos: [], removidas: [], duplicatasOriginais: [], avisos: [] };
+    relatorio.abas.push(aba);
+    const idx = indexSheet(doc);
+    const sst = book.sst;
+    const mergeEl = byTag(doc, "mergeCells")[0];
+    const ranges = mergeEl ? kids(mergeEl, "mergeCell").map(m => parseRange(m.getAttribute("ref"))) : [];
+
+    // Conteúdo original (para validação e para saber o que é "dado próprio")
+    const originais = new Map();
+    for (const [k, c] of idx.cells) { const v = cellKey(c, sst); if (v !== null) originais.set(k, v); }
+
+    // Linhas que já eram duplicadas antes do ajuste (só relatadas)
+    const vistos = new Map();
+    for (const r of [...idx.rows.keys()].sort((a, b) => a - b)) {
+      const sig = rowSig(idx, r, sst); if (!sig) continue;
+      if (vistos.has(sig)) aba.duplicatasOriginais.push([vistos.get(sig), r]); else vistos.set(sig, r);
+    }
+
+    // Desmesclar e repetir o dado
+    const esperados = new Map();
+    for (const g of ranges) {
+      aba.mesclagens++;
+      const master = idx.cells.get(g.r1 + "," + g.c1) || null;
+      const mk = cellKey(master, sst);
+      for (let r = g.r1; r <= g.r2; r++) for (let c = g.c1; c <= g.c2; c++) {
+        if (r === g.r1 && c === g.c1) continue;
+        const pos = r + "," + c;
+        if (originais.has(pos)) { aba.escondidos.push(colStr(c) + r); continue; }
+        const cell = getOrCreateCell(doc, idx, r, c);
+        copyCell(doc, idx.ns, master, cell);
+        if (mk !== null) { aba.preenchidas++; esperados.set(pos, mk); }
+      }
+    }
+    if (mergeEl) mergeEl.remove();
+    for (const row of idx.rows.values()) row.removeAttribute("spans");
+
+    // Linhas redundantes criadas pela desmesclagem
+    let remover = [];
+    if (removerRedundantes && ranges.length) {
+      const nums = [...idx.rows.keys()].sort((a, b) => a - b);
+      for (const r of nums) {
+        if (r < 2 || !idx.rows.has(r - 1)) continue;
+        const row = idx.rows.get(r);
+        const proprio = kids(row, "c").some(c => originais.has(r + "," + parseRef(c.getAttribute("r")).c));
+        if (proprio) continue;
+        const sig = rowSig(idx, r, sst);
+        if (sig && sig === rowSig(idx, r - 1, sst)) remover.push(r);
+      }
+      if (remover.length) {
+        const riscos = sheetRisks(doc, sh, book, allFormulaTexts);
+        if (riscos.length) {
+          aba.avisos.push(`${remover.length} linha(s) repetida(s) pela desmesclagem foram mantidas porque a aba tem ${riscos.join(", ")} (remover poderia quebrar referências): linhas ${remover.join(", ")}.`);
+          remover = [];
+        }
+      }
+    }
+
+    const mapa = new Map();
+    {
+      let desloc = 0; const set = new Set(remover);
+      const max = Math.max(0, ...idx.rows.keys());
+      for (let r = 1; r <= max; r++) { if (set.has(r)) desloc++; else mapa.set(r, r - desloc); }
+    }
+    if (remover.length) {
+      const set = new Set(remover);
+      for (const r of remover) idx.rows.get(r).remove();
+      for (const [r, row] of idx.rows) {
+        if (set.has(r)) continue;
+        const nr = mapa.get(r); if (nr === r) continue;
+        row.setAttribute("r", nr);
+        for (const c of kids(row, "c")) c.setAttribute("r", colStr(parseRef(c.getAttribute("r")).c) + nr);
+      }
+      const dim = byTag(doc, "dimension")[0];
+      if (dim && dim.getAttribute("ref")) dim.setAttribute("ref", adjustRangeList(dim.getAttribute("ref"), remover));
+      for (const el of [...byTag(doc, "autoFilter"), ...byTag(doc, "sortState"), ...byTag(doc, "sortCondition")]) {
+        if (el.getAttribute("ref")) el.setAttribute("ref", adjustRangeList(el.getAttribute("ref"), remover));
+      }
+      const af = byTag(doc, "autoFilter")[0];
+      if (af) {
+        for (const dn of byTag(book.wbDoc, "definedName")) {
+          if (dn.getAttribute("name") === "_xlnm._FilterDatabase" && +dn.getAttribute("localSheetId") === sh.index) {
+            const g = parseRange(af.getAttribute("ref"));
+            dn.textContent = `${escapeSheetName(sh.name)}!$${colStr(g.c1)}$${g.r1}:$${colStr(g.c2)}$${g.r2}`;
+            wbChanged = true;
+          }
+        }
+      }
+    }
+    aba.removidas = remover;
+
+    if (ranges.length || remover.length) zip.file(sh.path, serialize(doc, text));
+    checks.push({ sh, originais, esperados, mapa, removidos: new Set(remover) });
+  }
+  if (wbChanged) zip.file(book.wbPath, serialize(book.wbDoc, book.wbText));
+
+  const blob = await zip.generateAsync({
+    type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 },
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  relatorio.erros = await validar(blob, checks);
+  return { relatorio, blob };
+}
+
+async function validar(blob, checks) {
+  const erros = [];
+  const zip = await JSZip.loadAsync(blob);
+  const book = await openWorkbook(zip);
+  for (const ck of checks) {
+    const sh = book.sheets.find(s => s.name === ck.sh.name);
+    if (!sh || !sh.path || !zip.file(sh.path)) { erros.push(`Aba "${ck.sh.name}" ausente no arquivo gerado.`); continue; }
+    const doc = parseXml(await zip.file(sh.path).async("string"), sh.path);
+    const n = byTag(doc, "mergeCell").length;
+    if (n) erros.push(`Aba "${sh.name}": ainda há ${n} mesclagem(ns).`);
+    const idx = indexSheet(doc);
+    const kept = [...ck.mapa.keys()];
+    const destino = r => {
+      if (!ck.removidos.has(r)) return ck.mapa.get(r);
+      const acima = Math.max(...kept.filter(k => k < r)); return ck.mapa.get(acima);
+    };
+    for (const [pos, val] of ck.originais) {
+      const [r, c] = pos.split(",").map(Number);
+      const got = cellKey(idx.cells.get(destino(r) + "," + c), book.sst);
+      if (got !== val) erros.push(`Aba "${sh.name}": o valor original de ${colStr(c)}${r} ("${displayKey(val)}") não foi encontrado.`);
+    }
+    for (const [pos, val] of ck.esperados) {
+      const [r, c] = pos.split(",").map(Number);
+      if (ck.removidos.has(r)) continue;
+      const got = cellKey(idx.cells.get(ck.mapa.get(r) + "," + c), book.sst);
+      if (got !== val) erros.push(`Aba "${sh.name}": ${colStr(c)}${ck.mapa.get(r)} deveria conter "${displayKey(val)}".`);
+    }
+  }
+  return erros.slice(0, 50);
+}
+window.ajustarArquivo = ajustarArquivo; // usado nos testes automatizados
+
+/* ===================== Interface ===================== */
+const $ = s => document.querySelector(s);
+const results = $("#results");
+const downloadsPromise = (window.claude && typeof window.claude.use === "function")
+  ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
+
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) { if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const ch of children) if (ch != null) e.append(ch);
+  return e;
+}
+const nomeSaida = nome => nome.replace(/(\.[^.]+)$/, "_ajustado$1");
+
+async function salvar(blob, filename, msgEl) {
+  msgEl.className = "msg"; msgEl.textContent = "";
+  const dl = await downloadsPromise;
+  if (dl) {
+    try {
+      await dl.save({ filename, data: blob });
+      msgEl.className = "msg ok"; msgEl.textContent = "Download iniciado: " + filename;
+    } catch (e) {
+      const code = e && e.code;
+      msgEl.className = "msg bad";
+      msgEl.textContent =
+        code === "declined" ? "Download cancelado. Clique em baixar de novo quando quiser." :
+        code === "rejected_extension" ? "Este visualizador só permite baixar .xlsx. Para arquivos com macro (.xlsm), abra esta página fora do Claude (arquivo index.html do repositório)." :
+        code === "rate_limited" ? "Já há um download aguardando confirmação. Conclua-o e tente de novo." :
+        code === "host_unavailable" ? "Este app não consegue salvar arquivos. Abra a página no navegador ou no computador." :
+        "Não foi possível baixar aqui (" + (code || "erro") + ").";
+    }
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: filename });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  msgEl.className = "msg ok"; msgEl.textContent = "Download iniciado: " + filename;
+}
+
+function renderCard(nome, res) {
+  const { relatorio: rel, blob } = res;
+  const tot = k => rel.abas.reduce((s, a) => s + (Array.isArray(a[k]) ? a[k].length : a[k]), 0);
+  const atencao = rel.abas.some(a => a.duplicatasOriginais.length || a.avisos.length);
+  const pill = rel.erros.length ? el("span", { class: "pill bad" }, "Falhou na conferência")
+    : atencao ? el("span", { class: "pill warn" }, "Pronto · revisar avisos")
+    : el("span", { class: "pill ok" }, "Pronto · nada perdido");
+  const msg = el("p", { class: "msg", role: "status" });
+  const btn = el("button", { type: "button" }, "Baixar planilha ajustada");
+  btn.addEventListener("click", () => salvar(blob, nomeSaida(nome), msg));
+  if (rel.erros.length) { btn.classList.add("ghost"); btn.textContent = "Baixar mesmo assim"; }
+
+  const stat = (n, t) => el("div", { class: "stat" }, el("b", {}, String(n)), el("span", {}, t));
+  const details = el("details", {}, el("summary", {}, `Detalhes por aba (${rel.abas.length})`));
+  for (const a of rel.abas) {
+    const ul = el("ul");
+    ul.append(el("li", {}, `${a.mesclagens} mesclagem(ns) desfeita(s), ${a.preenchidas} célula(s) preenchida(s).`));
+    if (a.escondidos.length) ul.append(el("li", {}, "Valores escondidos preservados em: ", el("span", { class: "mono" }, a.escondidos.join(", "))));
+    if (a.removidas.length) ul.append(el("li", {}, "Linhas repetidas pela desmesclagem removidas (numeração original): ", el("span", { class: "mono" }, a.removidas.join(", "))));
+    for (const [o, d] of a.duplicatasOriginais) ul.append(el("li", { class: "warn" }, `A linha ${d} já era idêntica à linha ${o} no arquivo original. Foi mantida para não perder dados; revise.`));
+    for (const w of a.avisos) ul.append(el("li", { class: "warn" }, w));
+    details.append(el("div", { class: "sheet" }, el("h4", {}, a.nome), ul));
+  }
+  const card = el("article", { class: "card" },
+    el("div", { class: "card-head" }, el("span", { class: "fname" }, nome), pill),
+    el("div", { class: "stats" },
+      stat(tot("mesclagens"), "mesclagens desfeitas"),
+      stat(tot("preenchidas"), "células preenchidas"),
+      stat(tot("removidas"), "linhas redundantes removidas")),
+  );
+  if (rel.erros.length) {
+    const ul = el("ul");
+    rel.erros.forEach(e => ul.append(el("li", { class: "bad" }, e)));
+    card.append(el("div", { class: "sheet" }, el("h4", {}, "Problemas na conferência"), ul));
+  }
+  card.append(details, el("div", { class: "row" }, btn, msg));
+  if (atencao) details.open = true;
+  return card;
+}
+
+async function processar(nome, buffer) {
+  const placeholder = el("article", { class: "card" }, el("span", { class: "fname" }, nome), el("p", { class: "msg" }, "Ajustando…"));
+  results.prepend(placeholder);
+  try {
+    if (!/\.(xlsx|xlsm)$/i.test(nome)) throw new Error("Formato não suportado. Use .xlsx ou .xlsm (para .xls, abra no Excel e use Salvar como > Pasta de Trabalho do Excel).");
+    const res = await ajustarArquivo(buffer, { removerRedundantes: $("#optDup").checked });
+    placeholder.replaceWith(renderCard(nome, res));
+  } catch (e) {
+    placeholder.replaceWith(el("article", { class: "card" },
+      el("div", { class: "card-head" }, el("span", { class: "fname" }, nome), el("span", { class: "pill bad" }, "Não processado")),
+      el("p", { class: "msg bad" }, (e && e.message) || String(e))));
+  }
+}
+
+async function handleFiles(files) {
+  for (const f of files) await processar(f.name, await f.arrayBuffer());
+}
+$("#file").addEventListener("change", e => { handleFiles([...e.target.files]); e.target.value = ""; });
+const drop = $("#drop");
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => handleFiles([...e.dataTransfer.files]));
+
+const EXEMPLO_B64 = "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";
+$("#sample").addEventListener("click", () => {
+  const bin = atob(EXEMPLO_B64); const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  processar("exemplo_cenarios.xlsx", buf.buffer);
+});
+</script>
+</body>
+</html>
